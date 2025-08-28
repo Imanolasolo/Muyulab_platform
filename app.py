@@ -4,6 +4,8 @@ import sqlite3
 from db_setup import init_db
 from utils.login import require_login
 
+st.set_page_config(page_title="Muyu Lab", layout="wide")
+
 # Inicializar BD
 init_db()
 
