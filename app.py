@@ -27,7 +27,7 @@ st.title(f"Muyu Lab - Gestión de Relaciones ({user.get('rol','')})")
 # Opcional: Mostrar botón de logout
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.clear()
-    st.experimental_rerun()
+    st.rerun()
 
 # Puedes proteger secciones por rol, por ejemplo:
 if user.get("rol") == "cliente":
