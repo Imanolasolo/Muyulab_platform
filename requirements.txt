@@ -1,6 +1,2 @@
 streamlit
-<<<<<<< HEAD
-jwt
-=======
 PyJWT
->>>>>>> d127b45b69f8151e888d2bedbc8a6ad35ea1d542
