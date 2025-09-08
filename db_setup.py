@@ -29,9 +29,16 @@ def init_db():
         nombre TEXT NOT NULL,
         direccion TEXT,
         ciudad TEXT,
-        provincia TEXT
+        provincia TEXT,
+        anio_programa INTEGER  -- Nuevo campo para el año del programa
     )
     """)
+
+    # Verificar si la columna anio_programa existe, si no, agregarla (para migraciones)
+    cursor.execute("PRAGMA table_info(instituciones)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "anio_programa" not in columns:
+        cursor.execute("ALTER TABLE instituciones ADD COLUMN anio_programa INTEGER")
 
     # Relación KAM ↔ Institución
     cursor.execute("""
@@ -49,13 +56,35 @@ def init_db():
     CREATE TABLE IF NOT EXISTS contactos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
-        cargo TEXT CHECK(cargo IN ('directivo','docente','DECE')),
+        cargo TEXT NOT NULL,
         email TEXT NOT NULL,
         telefono TEXT,
         institucion_id INTEGER,
         FOREIGN KEY (institucion_id) REFERENCES instituciones (id)
     )
     """)
+
+    # Migración robusta: eliminar CHECK constraint en contactos.cargo si existe
+    cursor.execute("PRAGMA table_info(contactos)")
+    contacto_cols = cursor.fetchall()
+    # Buscar si la tabla tiene el CHECK constraint (por definición de la columna cargo)
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='contactos'")
+    contactos_sql = cursor.fetchone()
+    if contactos_sql and "CHECK" in contactos_sql[0]:
+        cursor.execute("ALTER TABLE contactos RENAME TO contactos_old")
+        cursor.execute("""
+        CREATE TABLE contactos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            cargo TEXT NOT NULL,
+            email TEXT NOT NULL,
+            telefono TEXT,
+            institucion_id INTEGER,
+            FOREIGN KEY (institucion_id) REFERENCES instituciones (id)
+        )
+        """)
+        cursor.execute("INSERT INTO contactos (id, nombre, cargo, email, telefono, institucion_id) SELECT id, nombre, cargo, email, telefono, institucion_id FROM contactos_old")
+        cursor.execute("DROP TABLE contactos_old")
 
     # Tabla de mensajes
     cursor.execute("""
@@ -86,6 +115,24 @@ def init_db():
             "INSERT INTO users (nombre, email, password, rol) VALUES (?, ?, ?, ?)",
             ("Administrador", "admin@muyulab.com", hash_password("admin123"), "admin")
         )
+
+    # Tabla de roles
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT UNIQUE NOT NULL
+    )
+    """)
+    # Insertar roles por defecto si no existen
+    default_roles = [
+        "Directivo",
+        "Contraparte",
+        "Líder pedagógico",
+        "Docente acompañado",
+        "Usuario Muyu App"
+    ]
+    for role in default_roles:
+        cursor.execute("INSERT OR IGNORE INTO roles (nombre) VALUES (?)", (role,))
 
     conn.commit()
     conn.close()

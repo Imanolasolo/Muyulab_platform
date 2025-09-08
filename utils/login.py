@@ -3,7 +3,7 @@ from modules.users import authenticate_user
 from utils.auth import create_jwt, decode_jwt
 
 def login_form():
-    st.subheader("Iniciar sesión")
+    st.subheader("Bienvenidos a MuyuLAB, tu plataforma de gestion educativa")
     email = st.text_input("Email")
     password = st.text_input("Contraseña", type="password")
     if st.button("Ingresar"):
