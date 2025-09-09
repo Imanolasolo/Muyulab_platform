@@ -84,7 +84,7 @@ if menu == "KAMs":
                 run_query("UPDATE kams SET nombre = ?, email = ?, telefono = ? WHERE id = ?", (new_nombre, new_email, new_telefono, kam_id))
                 run_query("UPDATE users SET nombre = ?, email = ? WHERE email = ? AND rol = ?", (new_nombre, new_email, kam_data[1], "KAM"))
                 st.success("KAM modificado correctamente")
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.info("No hay KAMs registrados.")
 
@@ -100,7 +100,7 @@ if menu == "KAMs":
                 run_query("DELETE FROM kams WHERE id = ?", (kam_id,))
                 run_query("DELETE FROM users WHERE email = ? AND rol = ?", (kam_data[1], "KAM"))
                 st.success("KAM eliminado correctamente")
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.info("No hay KAMs registrados.")
 
@@ -342,7 +342,7 @@ elif menu == "Mensajes":
                 run_query("UPDATE mensajes SET titulo = ?, cuerpo = ?, tipo = ?, fecha_envio_programada = ? WHERE id = ?",
                           (new_titulo, new_cuerpo, new_tipo, str(new_fecha), msg_id))
                 st.success("Mensaje modificado correctamente")
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.info("No hay mensajes registrados.")
 
