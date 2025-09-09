@@ -27,7 +27,7 @@ if user.get("rol", "").lower() == "kam":
     show_kam_dashboard()
     st.stop()
 
-st.title(f"Muyu Lab - Gestión de Relaciones ({user.get('rol','')})")
+st.title(f"Muyu Lab - :red[Gestión de Relaciones] ({user.get('rol','')})")
 
 # Opcional: Mostrar botón de logout
 if st.sidebar.button("Cerrar sesión"):
@@ -43,7 +43,7 @@ else:
 
 # ---------------- KAMs ----------------
 if menu == "KAMs":
-    st.subheader("Gestión de KAMs")
+    st.subheader(":blue[Gestión de KAMs]")
     acciones_kam = ["Registrar KAM", "Modificar KAM", "Borrar KAM", "Ver KAMs", "Asignar Instituciones"]
     accion_kam = st.selectbox("Selecciona una acción:", acciones_kam)
 
@@ -124,7 +124,7 @@ if menu == "KAMs":
 
 # ---------------- Instituciones ----------------
 elif menu == "Instituciones":
-    st.subheader("Gestión de Instituciones")
+    st.subheader(":blue[Gestión de Instituciones]")
     acciones = ["Crear institución", "Modificar institución", "Borrar institución", "Ver instituciones"]
     accion = st.selectbox("Selecciona una acción:", acciones)
 
@@ -184,7 +184,7 @@ elif menu == "Instituciones":
 
 # ---------------- Contactos ----------------
 elif menu == "Contactos":
-    st.subheader("Gestión de Contactos")
+    st.subheader(":blue[Gestión de Contactos]")
     acciones_contacto = ["Registrar contacto", "Modificar contacto", "Borrar contacto", "Ver contactos", "Carga masiva"]
     accion_contacto = st.selectbox("Selecciona una acción:", acciones_contacto)
 
@@ -199,7 +199,7 @@ elif menu == "Contactos":
         nombre = st.text_input("Nombre y Apellido")
         cargo = st.selectbox("Cargo", roles_list)
         email = st.text_input("Email institucional")
-        telefono = st.text_input("Teléfono celular")
+        telefono = st.text_input("Teléfono celular, :red[número compatible con WhatsApp]")
         if st.button("Guardar Contacto"):
             if institucion_id:
                 run_query("INSERT INTO contactos (nombre, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?)",
@@ -288,7 +288,7 @@ elif menu == "Contactos":
 
 # ---------------- Mensajes ----------------
 elif menu == "Mensajes":
-    st.subheader("Gestión de Mensajes")
+    st.subheader(":blue[Gestión de Mensajes]")
     acciones_msg = ["Registrar mensaje", "Modificar mensaje", "Borrar mensaje", "Ver mensajes"]
     accion_msg = st.selectbox("Selecciona una acción:", acciones_msg)
 
