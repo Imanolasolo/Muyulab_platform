@@ -141,7 +141,13 @@ def show_kam_dashboard():
             st.warning("No se encontró un número de teléfono válido para el contacto seleccionado.")
 
     # Historial de mensajes
-    st.subheader(":orange[Historial de mensajes enviados]")
+    st.subheader("Historial de mensajes enviados")
+    st.markdown(":red[Esta acción eliminará todos los mensajes del historial.]")
+    borrar = st.button("🗑️ Borrar historial de mensajes", key="borrar_historial")
+    if borrar:
+        run_query("DELETE FROM mensajes")
+        st.success("Historial de mensajes borrado.")
+        st.rerun()
     mensajes = run_query("SELECT titulo, tipo, fecha_envio_programada, enviado FROM mensajes ORDER BY fecha_envio_programada DESC").fetchall()
     for m in mensajes:
         status = "✅ Enviado" if m[3] else "⏳ Pendiente"
