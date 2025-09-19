@@ -1,0 +1,22 @@
+# Base de datos local (no sincronizar)
+database/muyulab.db
+database/last_sync.json
+database/schema_version.json
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Entornos virtuales
+.env
+.venv
+env/
+venv/
+
+# Archivos de configuración local
+.streamlit/secrets.toml
+
+# Logs
+*.log

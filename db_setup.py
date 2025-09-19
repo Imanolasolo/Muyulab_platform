@@ -1,9 +1,77 @@
 # db_setup.py
 import sqlite3
 import os
+import json
+from datetime import datetime
 from utils.auth import hash_password
 
 DB_PATH = "database/muyulab.db"
+MIGRATIONS_PATH = "database/migrations"
+SCHEMA_VERSION_FILE = "database/schema_version.json"
+
+def get_current_schema_version():
+    """Obtiene la versión actual del esquema de la BD"""
+    if os.path.exists(SCHEMA_VERSION_FILE):
+        with open(SCHEMA_VERSION_FILE, 'r') as f:
+            data = json.load(f)
+            return data.get('version', 0)
+    return 0
+
+def set_schema_version(version):
+    """Establece la versión del esquema"""
+    os.makedirs("database", exist_ok=True)
+    with open(SCHEMA_VERSION_FILE, 'w') as f:
+        json.dump({
+            'version': version,
+            'updated_at': datetime.now().isoformat()
+        }, f, indent=2)
+
+def run_migrations():
+    """Ejecuta migraciones pendientes"""
+    current_version = get_current_schema_version()
+    
+    # Define las migraciones disponibles
+    migrations = [
+        # Migración 1: Datos básicos iniciales
+        {
+            'version': 1,
+            'description': 'Datos iniciales del sistema',
+            'sql': [
+                "INSERT OR IGNORE INTO roles (nombre) VALUES ('Directivo')",
+                "INSERT OR IGNORE INTO roles (nombre) VALUES ('Contraparte')",
+                "INSERT OR IGNORE INTO roles (nombre) VALUES ('Líder pedagógico')",
+                "INSERT OR IGNORE INTO roles (nombre) VALUES ('Docente acompañado')",
+                "INSERT OR IGNORE INTO roles (nombre) VALUES ('Usuario Muyu App')",
+            ]
+        },
+        # Migración 2: Datos de ejemplo (puedes agregar más aquí)
+        {
+            'version': 2,
+            'description': 'Datos de ejemplo actualizados',
+            'sql': [
+                # Aquí puedes agregar nuevos registros que quieras sincronizar
+            ]
+        }
+    ]
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    for migration in migrations:
+        if migration['version'] > current_version:
+            print(f"Ejecutando migración {migration['version']}: {migration['description']}")
+            try:
+                for sql in migration['sql']:
+                    cursor.execute(sql)
+                conn.commit()
+                set_schema_version(migration['version'])
+                print(f"Migración {migration['version']} completada")
+            except Exception as e:
+                print(f"Error en migración {migration['version']}: {e}")
+                conn.rollback()
+                break
+    
+    conn.close()
 
 def init_db():
     # asegurar que existe la carpeta "database"

@@ -3,12 +3,14 @@ import streamlit as st
 import sqlite3
 from db_setup import init_db
 from utils.login import require_login
+from utils.data_sync import auto_sync
 from modules.dashboards.KAM_dashboard import show_kam_dashboard
 
 st.set_page_config(page_title="Muyu Lab", layout="wide")
 
-# Inicializar BD
+# Inicializar BD y sincronizar datos
 init_db()
+auto_sync()  # Sincronización automática al iniciar
 
 DB_PATH = "database/muyulab.db"
 
