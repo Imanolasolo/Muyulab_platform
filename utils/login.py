@@ -4,7 +4,11 @@ from utils.auth import create_jwt, decode_jwt
 from urllib.parse import quote
 
 def login_form():
-    st.subheader("Bienvenidos a :red[MuyuLAB], tu plataforma de gestión educativa")
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        st.image("assets/muyu_logo.jpg", width=200)
+    with col2:
+        st.subheader("Bienvenidos a :red[MuyuLAB], tu plataforma de gestión educativa")
     col1, col2 = st.columns([2, 2])
     with col1:
         st.subheader(":blue[Iniciar sesión]")

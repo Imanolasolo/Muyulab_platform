@@ -29,6 +29,18 @@ if user.get("rol", "").lower() == "kam":
 
 st.title(f"Muyu Lab - :red[Gestión de Relaciones] ({user.get('rol','')})")
 
+# Explicación del proceso en el sidebar
+with st.sidebar.expander("¿Cómo funciona la plataforma?", expanded=False):
+    st.markdown("""
+    **Guía rápida de administración:**
+    - Utiliza el menú de navegación para gestionar KAMs, instituciones, contactos y mensajes.
+    - Cada sección permite registrar, modificar, borrar y visualizar registros.
+    - Los KAMs pueden ser asignados a instituciones.
+    - Los contactos deben estar vinculados a una institución y tener un cargo válido.
+    - Los mensajes pueden programarse y gestionarse desde la sección correspondiente.
+    - Usa el botón 'Cerrar sesión' para salir de la plataforma.
+    """)
+
 # Opcional: Mostrar botón de logout
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.clear()

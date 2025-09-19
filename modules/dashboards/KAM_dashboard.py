@@ -33,6 +33,17 @@ def send_email(dest_email, subject, body):
         return False
 
 def show_kam_dashboard():
+    # Explicación del proceso en el sidebar
+    with st.sidebar.expander("¿Cómo funciona el Panel KAM?", expanded=False):
+        st.markdown("""
+        **Guía rápida Panel KAM:**
+        - Visualiza las instituciones asignadas y sus datos principales.
+        - Administra contactos vinculados a tus instituciones.
+        - Envía mensajes de seguimiento por email y WhatsApp.
+        - Consulta y borra el historial de mensajes enviados.
+        - Usa el botón 'Cerrar sesión' para salir del panel.
+        """)
+
     # Botón de cerrar sesión
     if st.sidebar.button("Cerrar sesión", key="logout_kam"):
         st.session_state.clear()
@@ -51,11 +62,15 @@ def show_kam_dashboard():
     else:
         st.info("No hay instituciones registradas.")
 
-    # ---------------- Contactos ----------------
+   
+
+    # ---------------- Contactos CRUD ----------------
     if menu == "Contactos":
         with st.expander("Administrar Contactos"):
             st.subheader(":blue[Gestión de Contactos]")
-            acciones_contacto = ["Registrar contacto", "Modificar contacto", "Borrar contacto", "Ver contactos", "Carga masiva"]
+            acciones_contacto = [
+                "Registrar contacto", "Modificar contacto", "Borrar contacto", "Ver contactos", "Carga masiva"
+            ]
             accion_contacto = st.selectbox("Selecciona una acción:", acciones_contacto)
 
             instituciones = run_query("SELECT id, nombre FROM instituciones").fetchall()
@@ -89,22 +104,22 @@ def show_kam_dashboard():
                 contactos = run_query("SELECT id, nombre, cargo, email, telefono, institucion_id FROM contactos").fetchall()
                 if contactos:
                     contacto_dict = {f"{c[1]} - {c[2]} | {c[3]} | {c[4]}": c[0] for c in contactos}
-                    contacto_sel = st.selectbox("Selecciona contacto", list(contacto_dict.keys()), key="mod_contacto")
+                    contacto_sel = st.selectbox("Selecciona contacto", list(contacto_dict.keys()), key="mod_contacto_kam")
                     contacto_id = contacto_dict[contacto_sel]
                     contacto_data = run_query("SELECT nombre, cargo, email, telefono, institucion_id FROM contactos WHERE id = ?", (contacto_id,)).fetchone()
-                    new_nombre = st.text_input("Nuevo nombre", value=contacto_data[0], key="edit_contacto_nombre")
-                    new_cargo = st.selectbox("Nuevo cargo", roles_list, index=roles_list.index(contacto_data[1]) if contacto_data[1] in roles_list else 0, key="edit_contacto_cargo")
-                    new_email = st.text_input("Nuevo email", value=contacto_data[2], key="edit_contacto_email")
-                    new_telefono = st.text_input("Nuevo teléfono", value=contacto_data[3], key="edit_contacto_tel")
+                    new_nombre = st.text_input("Nuevo nombre", value=contacto_data[0], key="edit_contacto_nombre_kam")
+                    new_cargo = st.selectbox("Nuevo cargo", roles_list, index=roles_list.index(contacto_data[1]) if contacto_data[1] in roles_list else 0, key="edit_contacto_cargo_kam")
+                    new_email = st.text_input("Nuevo email", value=contacto_data[2], key="edit_contacto_email_kam")
+                    new_telefono = st.text_input("Nuevo teléfono", value=contacto_data[3], key="edit_contacto_tel_kam")
                     inst_names = list(institucion_dict.keys())
                     inst_ids = list(institucion_dict.values())
                     try:
                         inst_index = inst_ids.index(contacto_data[4])
                     except ValueError:
                         inst_index = 0
-                    new_inst = st.selectbox("Nueva institución", inst_names, index=inst_index, key="edit_contacto_inst")
+                    new_inst = st.selectbox("Nueva institución", inst_names, index=inst_index, key="edit_contacto_inst_kam")
                     new_inst_id = institucion_dict[new_inst]
-                    if st.button("Guardar cambios contacto"):
+                    if st.button("Guardar cambios contacto", key="guardar_cambios_contacto_kam"):
                         run_query("UPDATE contactos SET nombre = ?, cargo = ?, email = ?, telefono = ?, institucion_id = ? WHERE id = ?",
                                 (new_nombre, new_cargo, new_email, new_telefono, new_inst_id, contacto_id))
                         st.success("Contacto modificado correctamente")
@@ -117,9 +132,9 @@ def show_kam_dashboard():
                 contactos = run_query("SELECT id, nombre, cargo, email, telefono FROM contactos").fetchall()
                 if contactos:
                     contacto_dict = {f"{c[1]} - {c[2]} | {c[3]} | {c[4]}": c[0] for c in contactos}
-                    contacto_sel = st.selectbox("Selecciona contacto", list(contacto_dict.keys()), key="del_contacto")
+                    contacto_sel = st.selectbox("Selecciona contacto", list(contacto_dict.keys()), key="del_contacto_kam")
                     contacto_id = contacto_dict[contacto_sel]
-                    if st.button("Borrar contacto"):
+                    if st.button("Borrar contacto", key="borrar_contacto_kam"):
                         run_query("DELETE FROM contactos WHERE id = ?", (contacto_id,))
                         st.success("Contacto eliminado correctamente")
                         st.rerun()
