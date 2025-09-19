@@ -145,38 +145,64 @@ elif menu == "Instituciones":
     if accion == "Crear institución":
         with st.form("inst_form"):
             nombre = st.text_input("Nombre de institución")
+            direccion = st.text_input("Dirección")
             ciudad = st.text_input("Ciudad")
+            provincia = st.text_input("Provincia/Estado")
+            pais = st.text_input("País")
             anio_programa = st.selectbox("Año de programa", [f"Año {i}" for i in range(1, 7)])
+            tipo_programa = st.selectbox("Tipo de programa", ["Muyu Lab", "Muyu App", "Muyu Scalelab"])
+            plan = st.selectbox("Plan", ["Pago", "Apadrinado"])
             submitted = st.form_submit_button("Guardar")
             if submitted and nombre:
-                run_query("INSERT INTO instituciones (nombre, ciudad, anio_programa) VALUES (?, ?, ?)",
-                          (nombre, ciudad, anio_programa))
+                run_query("INSERT INTO instituciones (nombre, direccion, ciudad, provincia, pais, anio_programa, tipo_programa, plan) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                          (nombre, direccion, ciudad, provincia, pais, anio_programa, tipo_programa, plan))
                 st.success("Institución agregada correctamente")
 
     elif accion == "Ver instituciones":
         st.write("### Lista de Instituciones")
-        insts = run_query("SELECT id, nombre, ciudad, anio_programa FROM instituciones").fetchall()
+        insts = run_query("SELECT id, nombre, direccion, ciudad, provincia, pais, anio_programa, tipo_programa, plan FROM instituciones").fetchall()
         for i in insts:
-            st.write(f"{i[1]} ({i[2]}) - {i[3]}")
+            st.write(f"**{i[1]}** | {i[2] or 'Sin dirección'} | {i[3] or 'Sin ciudad'}, {i[4] or 'Sin provincia'}, {i[5] or 'Sin país'} | {i[6] or 'Sin año'} | {i[7] or 'Muyu Lab'} | {i[8] or 'Pago'}")
 
     elif accion == "Modificar institución":
         st.write("### Modificar Institución")
-        insts = run_query("SELECT id, nombre, ciudad, anio_programa FROM instituciones").fetchall()
+        insts = run_query("SELECT id, nombre, direccion, ciudad, provincia, pais, anio_programa, tipo_programa, plan FROM instituciones").fetchall()
         if insts:
-            inst_dict = {f"{i[1]} ({i[2]}) - {i[3]}": i[0] for i in insts}
+            inst_dict = {f"{i[1]} ({i[3]}, {i[5]}) - {i[6]} - {i[7]}": i[0] for i in insts}
             inst_sel = st.selectbox("Selecciona institución", list(inst_dict.keys()), key="mod_inst")
             inst_id = inst_dict[inst_sel]
-            inst_data = run_query("SELECT nombre, ciudad, anio_programa FROM instituciones WHERE id = ?", (inst_id,)).fetchone()
-            new_nombre = st.text_input("Nuevo nombre", value=inst_data[0], key="edit_nombre")
-            new_ciudad = st.text_input("Nueva ciudad", value=inst_data[1], key="edit_ciudad")
+            inst_data = run_query("SELECT nombre, direccion, ciudad, provincia, pais, anio_programa, tipo_programa, plan FROM instituciones WHERE id = ?", (inst_id,)).fetchone()
+            
+            new_nombre = st.text_input("Nuevo nombre", value=inst_data[0] or "", key="edit_nombre")
+            new_direccion = st.text_input("Nueva dirección", value=inst_data[1] or "", key="edit_direccion")
+            new_ciudad = st.text_input("Nueva ciudad", value=inst_data[2] or "", key="edit_ciudad")
+            new_provincia = st.text_input("Nueva provincia/estado", value=inst_data[3] or "", key="edit_provincia")
+            new_pais = st.text_input("Nuevo país", value=inst_data[4] or "", key="edit_pais")
+            
             anios = [f"Año {i}" for i in range(1, 7)]
             try:
-                anio_index = anios.index(inst_data[2])
-            except ValueError:
+                anio_index = anios.index(inst_data[5]) if inst_data[5] else 0
+            except (ValueError, TypeError):
                 anio_index = 0
             new_anio = st.selectbox("Nuevo año de programa", anios, index=anio_index, key="edit_anio")
+            
+            tipos_programa = ["Muyu Lab", "Muyu App", "Muyu Scalelab"]
+            try:
+                tipo_index = tipos_programa.index(inst_data[6]) if inst_data[6] else 0
+            except (ValueError, TypeError):
+                tipo_index = 0
+            new_tipo_programa = st.selectbox("Nuevo tipo de programa", tipos_programa, index=tipo_index, key="edit_tipo")
+            
+            planes = ["Pago", "Apadrinado"]
+            try:
+                plan_index = planes.index(inst_data[7]) if inst_data[7] else 0
+            except (ValueError, TypeError):
+                plan_index = 0
+            new_plan = st.selectbox("Nuevo plan", planes, index=plan_index, key="edit_plan")
+            
             if st.button("Guardar cambios"):
-                run_query("UPDATE instituciones SET nombre = ?, ciudad = ?, anio_programa = ? WHERE id = ?", (new_nombre, new_ciudad, new_anio, inst_id))
+                run_query("UPDATE instituciones SET nombre = ?, direccion = ?, ciudad = ?, provincia = ?, pais = ?, anio_programa = ?, tipo_programa = ?, plan = ? WHERE id = ?", 
+                         (new_nombre, new_direccion, new_ciudad, new_provincia, new_pais, new_anio, new_tipo_programa, new_plan, inst_id))
                 st.success("Institución modificada correctamente")
                 st.rerun()
         else:
@@ -184,9 +210,9 @@ elif menu == "Instituciones":
 
     elif accion == "Borrar institución":
         st.write("### Borrar Institución")
-        insts = run_query("SELECT id, nombre, ciudad, anio_programa FROM instituciones").fetchall()
+        insts = run_query("SELECT id, nombre, ciudad, pais, tipo_programa, plan FROM instituciones").fetchall()
         if insts:
-            inst_dict = {f"{i[1]} ({i[2]}) - {i[3]}": i[0] for i in insts}
+            inst_dict = {f"{i[1]} ({i[2]}, {i[3]}) - {i[4]} - {i[5]}": i[0] for i in insts}
             inst_sel = st.selectbox("Selecciona institución", list(inst_dict.keys()), key="del_inst")
             inst_id = inst_dict[inst_sel]
             if st.button("Borrar institución"):
@@ -210,47 +236,50 @@ elif menu == "Contactos":
     if accion_contacto == "Registrar contacto":
         institucion_nombre = st.selectbox("Institución", list(institucion_dict.keys())) if instituciones else None
         institucion_id = institucion_dict[institucion_nombre] if institucion_nombre else None
-        nombre = st.text_input("Nombre y Apellido")
+        nombre = st.text_input("Nombre")
+        apellidos = st.text_input("Apellidos")
         cargo = st.selectbox("Cargo", roles_list)
         email = st.text_input("Email institucional")
         telefono = st.text_input("Teléfono celular, :red[número compatible con WhatsApp]")
         if st.button("Guardar Contacto"):
             if institucion_id:
-                run_query("INSERT INTO contactos (nombre, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?)",
-                          (nombre, cargo, email, telefono, institucion_id))
+                run_query("INSERT INTO contactos (nombre, apellidos, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?, ?)",
+                          (nombre, apellidos, cargo, email, telefono, institucion_id))
                 st.success("Contacto agregado correctamente")
             else:
                 st.warning("Debes registrar al menos una institución antes de agregar contactos.")
 
     elif accion_contacto == "Ver contactos":
         st.write("### Lista de Contactos")
-        contactos = run_query("SELECT nombre, cargo, email, telefono FROM contactos").fetchall()
+        contactos = run_query("SELECT nombre, apellidos, cargo, email, telefono FROM contactos").fetchall()
         for c in contactos:
-            st.write(f"{c[0]} - {c[1]} | {c[2]} | {c[3]}")
+            nombre_completo = f"{c[0]} {c[1] or ''}".strip()
+            st.write(f"{nombre_completo} - {c[2]} | {c[3]} | {c[4]}")
 
     elif accion_contacto == "Modificar contacto":
         st.write("### Modificar Contacto")
-        contactos = run_query("SELECT id, nombre, cargo, email, telefono, institucion_id FROM contactos").fetchall()
+        contactos = run_query("SELECT id, nombre, apellidos, cargo, email, telefono, institucion_id FROM contactos").fetchall()
         if contactos:
-            contacto_dict = {f"{c[1]} - {c[2]} | {c[3]} | {c[4]}": c[0] for c in contactos}
+            contacto_dict = {f"{c[1]} {c[2] or ''} - {c[3]} | {c[4]} | {c[5]}".strip(): c[0] for c in contactos}
             contacto_sel = st.selectbox("Selecciona contacto", list(contacto_dict.keys()), key="mod_contacto")
             contacto_id = contacto_dict[contacto_sel]
-            contacto_data = run_query("SELECT nombre, cargo, email, telefono, institucion_id FROM contactos WHERE id = ?", (contacto_id,)).fetchone()
+            contacto_data = run_query("SELECT nombre, apellidos, cargo, email, telefono, institucion_id FROM contactos WHERE id = ?", (contacto_id,)).fetchone()
             new_nombre = st.text_input("Nuevo nombre", value=contacto_data[0], key="edit_contacto_nombre")
-            new_cargo = st.selectbox("Nuevo cargo", roles_list, index=roles_list.index(contacto_data[1]) if contacto_data[1] in roles_list else 0, key="edit_contacto_cargo")
-            new_email = st.text_input("Nuevo email", value=contacto_data[2], key="edit_contacto_email")
-            new_telefono = st.text_input("Nuevo teléfono", value=contacto_data[3], key="edit_contacto_tel")
+            new_apellidos = st.text_input("Nuevos apellidos", value=contacto_data[1] or "", key="edit_contacto_apellidos")
+            new_cargo = st.selectbox("Nuevo cargo", roles_list, index=roles_list.index(contacto_data[2]) if contacto_data[2] in roles_list else 0, key="edit_contacto_cargo")
+            new_email = st.text_input("Nuevo email", value=contacto_data[3], key="edit_contacto_email")
+            new_telefono = st.text_input("Nuevo teléfono", value=contacto_data[4], key="edit_contacto_tel")
             inst_names = list(institucion_dict.keys())
             inst_ids = list(institucion_dict.values())
             try:
-                inst_index = inst_ids.index(contacto_data[4])
+                inst_index = inst_ids.index(contacto_data[5])
             except ValueError:
                 inst_index = 0
             new_inst = st.selectbox("Nueva institución", inst_names, index=inst_index, key="edit_contacto_inst")
             new_inst_id = institucion_dict[new_inst]
             if st.button("Guardar cambios contacto"):
-                run_query("UPDATE contactos SET nombre = ?, cargo = ?, email = ?, telefono = ?, institucion_id = ? WHERE id = ?",
-                          (new_nombre, new_cargo, new_email, new_telefono, new_inst_id, contacto_id))
+                run_query("UPDATE contactos SET nombre = ?, apellidos = ?, cargo = ?, email = ?, telefono = ?, institucion_id = ? WHERE id = ?",
+                          (new_nombre, new_apellidos, new_cargo, new_email, new_telefono, new_inst_id, contacto_id))
                 st.success("Contacto modificado correctamente")
                 st.rerun()
         else:
@@ -258,9 +287,9 @@ elif menu == "Contactos":
 
     elif accion_contacto == "Borrar contacto":
         st.write("### Borrar Contacto")
-        contactos = run_query("SELECT id, nombre, cargo, email, telefono FROM contactos").fetchall()
+        contactos = run_query("SELECT id, nombre, apellidos, cargo, email, telefono FROM contactos").fetchall()
         if contactos:
-            contacto_dict = {f"{c[1]} - {c[2]} | {c[3]} | {c[4]}": c[0] for c in contactos}
+            contacto_dict = {f"{c[1]} {c[2] or ''} - {c[3]} | {c[4]} | {c[5]}".strip(): c[0] for c in contactos}
             contacto_sel = st.selectbox("Selecciona contacto", list(contacto_dict.keys()), key="del_contacto")
             contacto_id = contacto_dict[contacto_sel]
             if st.button("Borrar contacto"):
@@ -276,21 +305,22 @@ elif menu == "Contactos":
         if csv_file is not None:
             import pandas as pd
             df = pd.read_csv(csv_file)
-            required_cols = {"nombre", "cargo", "email", "telefono", "institucion"}
+            required_cols = {"nombre", "apellidos", "cargo", "email", "telefono", "institucion"}
             if required_cols.issubset(df.columns):
                 inst_map = {nombre: iid for iid, nombre in instituciones}
                 roles_set = set(roles_list)
                 success, fail = 0, 0
                 for _, row in df.iterrows():
                     nombre = row["nombre"]
+                    apellidos = row["apellidos"]
                     cargo = row["cargo"]
                     email = row["email"]
                     telefono = row["telefono"]
                     institucion = row["institucion"]
                     institucion_id = inst_map.get(institucion)
                     if institucion_id and cargo in roles_set:
-                        run_query("INSERT INTO contactos (nombre, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?)",
-                                  (nombre, cargo, email, telefono, institucion_id))
+                        run_query("INSERT INTO contactos (nombre, apellidos, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?, ?)",
+                                  (nombre, apellidos, cargo, email, telefono, institucion_id))
                         success += 1
                     else:
                         fail += 1
@@ -314,7 +344,9 @@ elif menu == "Mensajes":
                 "Recordatorio de agenda",
                 "Entrega de informe",
                 "Motivacional",
-                "Seguimiento"
+                "Seguimiento",
+                "Resolución de dudas",
+                "Tendencias"
             ])
             fecha = st.date_input("Fecha programada")
             submitted = st.form_submit_button("Guardar")
@@ -344,7 +376,9 @@ elif menu == "Mensajes":
                 "Recordatorio de agenda",
                 "Entrega de informe",
                 "Motivacional",
-                "Seguimiento"
+                "Seguimiento",
+                "Resolución de dudas",
+                "Tendencias"
             ]
             try:
                 tipo_index = tipos.index(msg_data[2])

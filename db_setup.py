@@ -51,6 +51,24 @@ def run_migrations():
             'sql': [
                 # Aquí puedes agregar nuevos registros que quieras sincronizar
             ]
+        },
+        # Migración 3: Nuevos campos para instituciones
+        {
+            'version': 3,
+            'description': 'Agregar campos País, Dirección, Tipo de programa y Plan a instituciones',
+            'sql': [
+                "ALTER TABLE instituciones ADD COLUMN pais TEXT",
+                "ALTER TABLE instituciones ADD COLUMN tipo_programa TEXT DEFAULT 'Muyu Lab'",
+                "ALTER TABLE instituciones ADD COLUMN plan TEXT DEFAULT 'Pago'"
+            ]
+        },
+        # Migración 4: Separar nombre y apellidos en contactos
+        {
+            'version': 4,
+            'description': 'Agregar campo apellidos a contactos',
+            'sql': [
+                "ALTER TABLE contactos ADD COLUMN apellidos TEXT"
+            ]
         }
     ]
     
@@ -98,15 +116,25 @@ def init_db():
         direccion TEXT,
         ciudad TEXT,
         provincia TEXT,
-        anio_programa INTEGER  -- Nuevo campo para el año del programa
+        pais TEXT,
+        anio_programa INTEGER,
+        tipo_programa TEXT DEFAULT 'Muyu Lab',
+        plan TEXT DEFAULT 'Pago'
     )
     """)
 
-    # Verificar si la columna anio_programa existe, si no, agregarla (para migraciones)
+    # Verificar y agregar columnas faltantes para migraciones
     cursor.execute("PRAGMA table_info(instituciones)")
     columns = [col[1] for col in cursor.fetchall()]
+    
     if "anio_programa" not in columns:
         cursor.execute("ALTER TABLE instituciones ADD COLUMN anio_programa INTEGER")
+    if "pais" not in columns:
+        cursor.execute("ALTER TABLE instituciones ADD COLUMN pais TEXT")
+    if "tipo_programa" not in columns:
+        cursor.execute("ALTER TABLE instituciones ADD COLUMN tipo_programa TEXT DEFAULT 'Muyu Lab'")
+    if "plan" not in columns:
+        cursor.execute("ALTER TABLE instituciones ADD COLUMN plan TEXT DEFAULT 'Pago'")
 
     # Relación KAM ↔ Institución
     cursor.execute("""
@@ -124,6 +152,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS contactos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
+        apellidos TEXT,
         cargo TEXT NOT NULL,
         email TEXT NOT NULL,
         telefono TEXT,
@@ -131,6 +160,13 @@ def init_db():
         FOREIGN KEY (institucion_id) REFERENCES instituciones (id)
     )
     """)
+
+    # Verificar y agregar columnas faltantes para migraciones
+    cursor.execute("PRAGMA table_info(contactos)")
+    contacto_columns = [col[1] for col in cursor.fetchall()]
+    
+    if "apellidos" not in contacto_columns:
+        cursor.execute("ALTER TABLE contactos ADD COLUMN apellidos TEXT")
 
     # Migración robusta: eliminar CHECK constraint en contactos.cargo si existe
     cursor.execute("PRAGMA table_info(contactos)")
@@ -204,6 +240,9 @@ def init_db():
 
     conn.commit()
     conn.close()
+    
+    # Ejecutar migraciones después de crear las tablas
+    run_migrations()
 
 if __name__ == "__main__":
     init_db()
