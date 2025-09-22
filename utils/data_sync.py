@@ -67,12 +67,81 @@ def sync_data():
     finally:
         conn.close()
 
-def auto_sync():
-    """Verifica si necesita sincronizar y lo hace automáticamente"""
-    if os.path.exists(SYNC_DATA_FILE):
-        file_mod_time = datetime.fromtimestamp(os.path.getmtime(SYNC_DATA_FILE))
-        last_sync = get_last_sync()
+def get_table_columns(table_name):
+    """Obtiene las columnas existentes de una tabla"""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table_name})")
+    columns = [row[1] for row in cur.fetchall()]  # row[1] es el nombre de la columna
+    conn.close()
+    return columns
+
+def column_exists(table_name, column_name):
+    """Verifica si una columna existe en una tabla"""
+    columns = get_table_columns(table_name)
+    return column_name in columns
+
+def run_migration_3():
+    """Migración 3: Agregar campos País, Dirección, Tipo de programa y Plan a instituciones"""
+    print("Ejecutando migración 3: Agregar campos País, Dirección, Tipo de programa y Plan a instituciones")
+    
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    
+    try:
+        # Verificar y agregar cada columna solo si no existe
+        columns_to_add = [
+            ("pais", "TEXT"),
+            ("direccion", "TEXT"), 
+            ("tipo_programa", "TEXT DEFAULT 'Muyu Lab'"),
+            ("plan", "TEXT DEFAULT 'Pago'")
+        ]
         
-        if last_sync is None or file_mod_time > datetime.fromisoformat(last_sync):
-            print("Detectados cambios en datos de sincronización. Sincronizando...")
-            sync_data()
+        for column_name, column_definition in columns_to_add:
+            if not column_exists("instituciones", column_name):
+                cur.execute(f"ALTER TABLE instituciones ADD COLUMN {column_name} {column_definition}")
+                print(f"✅ Columna '{column_name}' agregada a instituciones")
+            else:
+                print(f"ℹ️ Columna '{column_name}' ya existe en instituciones")
+        
+        conn.commit()
+        print("✅ Migración 3 completada exitosamente")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Error en migración 3: {e}")
+        raise e
+    finally:
+        conn.close()
+
+def auto_sync():
+    """Sincronización automática de datos al iniciar la aplicación"""
+    try:
+        current_version = get_current_version()
+        print(f"Versión actual de la base de datos: {current_version}")
+        
+        # Lista de migraciones disponibles
+        migrations = {
+            1: run_migration_1,
+            2: run_migration_2, 
+            3: run_migration_3,
+            4: run_migration_4
+        }
+        
+        # Ejecutar migraciones pendientes
+        for version, migration_func in migrations.items():
+            if current_version < version:
+                try:
+                    migration_func()
+                    set_current_version(version)
+                    print(f"✅ Migración {version} aplicada correctamente")
+                except Exception as e:
+                    print(f"❌ Error en migración {version}: {e}")
+                    # No detener el proceso, continuar con la aplicación
+                    break
+        
+        print("🔄 Sincronización automática completada")
+        
+    except Exception as e:
+        print(f"⚠️ Error en sincronización automática: {e}")
+        # No lanzar excepción para no detener la aplicación

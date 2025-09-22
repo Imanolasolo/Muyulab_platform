@@ -135,14 +135,33 @@ def show_kam_dashboard():
 
     st.header("Panel KAM: :red[Seguimiento de Instituciones y Clientes]")
 
-    # Ver instituciones y año de programa
+    # Obtener el email del KAM actual
+    user = st.session_state.get("user", {})
+    kam_email = user.get("email", "")
+    
+    # Obtener el ID del KAM actual
+    kam_data = run_query("SELECT id FROM kams WHERE email = ?", (kam_email,))
+    if not kam_data:
+        st.error("❌ No se pudo encontrar tu información de KAM. Contacta al administrador.")
+        return
+    
+    kam_id = kam_data[0][0]
+
+    # Ver instituciones ASIGNADAS al KAM
     st.subheader(":blue[Instituciones asignadas]")
-    instituciones = run_query("SELECT id, nombre, ciudad, anio_programa FROM instituciones")
+    instituciones = run_query("""
+        SELECT i.id, i.nombre, i.ciudad, i.anio_programa 
+        FROM instituciones i 
+        JOIN kam_institucion ki ON i.id = ki.institucion_id 
+        WHERE ki.kam_id = ?
+    """, (kam_id,))
+    
     if instituciones:
         for inst in instituciones:
             st.markdown(f"**{inst[1]}** ({inst[2]}) - {inst[3]}")
     else:
-        st.info("No hay instituciones registradas.")
+        st.info("No tienes instituciones asignadas. Contacta al administrador para que te asigne instituciones.")
+        return  # Si no tiene instituciones asignadas, no mostrar el resto del panel
 
     # ---------------- Contactos CRUD ----------------
     if menu == "Contactos":
@@ -153,35 +172,46 @@ def show_kam_dashboard():
             ]
             accion_contacto = st.selectbox("Selecciona una acción:", acciones_contacto)
 
-            instituciones = run_query("SELECT id, nombre FROM instituciones")
+            # Solo mostrar instituciones ASIGNADAS al KAM
+            instituciones = run_query("""
+                SELECT i.id, i.nombre 
+                FROM instituciones i 
+                JOIN kam_institucion ki ON i.id = ki.institucion_id 
+                WHERE ki.kam_id = ?
+            """, (kam_id,))
+            
             institucion_dict = {nombre: iid for iid, nombre in instituciones}
             roles = run_query("SELECT nombre FROM roles")
             roles_list = [r[0] for r in roles] if roles else []
 
             if accion_contacto == "Registrar contacto":
-                institucion_nombre = st.selectbox("Institución", list(institucion_dict.keys())) if instituciones else None
-                institucion_id = institucion_dict[institucion_nombre] if institucion_nombre else None
+                if not instituciones:
+                    st.warning("⚠️ No tienes instituciones asignadas. No puedes registrar contactos.")
+                    return
+                    
+                institucion_nombre = st.selectbox("Institución", list(institucion_dict.keys()))
+                institucion_id = institucion_dict[institucion_nombre]
                 nombre = st.text_input("Nombre")
                 apellidos = st.text_input("Apellidos")
                 cargo = st.selectbox("Cargo", roles_list)
                 email = st.text_input("Email institucional")
                 telefono = st.text_input("Teléfono celular, :red[número compatible con WhatsApp]")
                 if st.button("Guardar Contacto"):
-                    if institucion_id:
-                        run_query("INSERT INTO contactos (nombre, apellidos, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?, ?)",
-                                (nombre, apellidos, cargo, email, telefono, institucion_id))
-                        st.success("Contacto agregado correctamente")
-                    else:
-                        st.warning("Debes registrar al menos una institución antes de agregar contactos.")
+                    run_query("INSERT INTO contactos (nombre, apellidos, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?, ?)",
+                            (nombre, apellidos, cargo, email, telefono, institucion_id))
+                    st.success("Contacto agregado correctamente")
 
             elif accion_contacto == "Ver contactos":
                 st.write("### Lista de Contactos")
+                # Solo mostrar contactos de instituciones asignadas al KAM
                 contactos = run_query("""
                     SELECT c.nombre, c.apellidos, c.cargo, c.email, c.telefono, i.nombre as institucion
                     FROM contactos c 
                     JOIN instituciones i ON c.institucion_id = i.id
+                    JOIN kam_institucion ki ON i.id = ki.institucion_id 
+                    WHERE ki.kam_id = ?
                     ORDER BY i.nombre, c.nombre
-                """)
+                """, (kam_id,))
                 
                 if contactos:
                     # Agrupar por institución para mejor visualización
@@ -206,11 +236,19 @@ def show_kam_dashboard():
                             st.write(f"• **{contacto['nombre']}** - {contacto['cargo']} | {contacto['email']} | {contacto['telefono']}")
                         st.markdown("---")
                 else:
-                    st.info("No hay contactos registrados.")
+                    st.info("No hay contactos registrados en tus instituciones asignadas.")
 
             elif accion_contacto == "Modificar contacto":
                 st.write("### Modificar Contacto")
-                contactos = run_query("SELECT id, nombre, apellidos, cargo, email, telefono, institucion_id FROM contactos")
+                # Solo mostrar contactos de instituciones asignadas al KAM
+                contactos = run_query("""
+                    SELECT c.id, c.nombre, c.apellidos, c.cargo, c.email, c.telefono, c.institucion_id 
+                    FROM contactos c 
+                    JOIN instituciones i ON c.institucion_id = i.id
+                    JOIN kam_institucion ki ON i.id = ki.institucion_id 
+                    WHERE ki.kam_id = ?
+                """, (kam_id,))
+                
                 if contactos:
                     contacto_dict = {f"{c[1]} {c[2] or ''} - {c[3]} | {c[4]} | {c[5]}".strip(): c[0] for c in contactos}
                     contacto_sel = st.selectbox("Selecciona contacto", list(contacto_dict.keys()), key="mod_contacto_kam")
@@ -237,11 +275,19 @@ def show_kam_dashboard():
                             st.success("Contacto modificado correctamente")
                             st.rerun()
                 else:
-                    st.info("No hay contactos registrados.")
+                    st.info("No hay contactos registrados en tus instituciones asignadas.")
 
             elif accion_contacto == "Borrar contacto":
                 st.write("### Borrar Contacto")
-                contactos = run_query("SELECT id, nombre, apellidos, cargo, email, telefono FROM contactos")
+                # Solo mostrar contactos de instituciones asignadas al KAM
+                contactos = run_query("""
+                    SELECT c.id, c.nombre, c.apellidos, c.cargo, c.email, c.telefono 
+                    FROM contactos c 
+                    JOIN instituciones i ON c.institucion_id = i.id
+                    JOIN kam_institucion ki ON i.id = ki.institucion_id 
+                    WHERE ki.kam_id = ?
+                """, (kam_id,))
+                
                 if contactos:
                     contacto_dict = {f"{c[1]} {c[2] or ''} - {c[3]} | {c[4]} | {c[5]}".strip(): c[0] for c in contactos}
                     contacto_sel = st.selectbox("Selecciona contacto", list(contacto_dict.keys()), key="del_contacto_kam")
@@ -251,10 +297,16 @@ def show_kam_dashboard():
                         st.success("Contacto eliminado correctamente")
                         st.rerun()
                 else:
-                    st.info("No hay contactos registrados.")
+                    st.info("No hay contactos registrados en tus instituciones asignadas.")
 
             elif accion_contacto == "Carga masiva":
+                if not instituciones:
+                    st.warning("⚠️ No tienes instituciones asignadas. No puedes realizar carga masiva.")
+                    return
+                    
                 st.write("### Carga masiva de contactos")
+                st.info("ℹ️ Solo puedes agregar contactos a las instituciones que tienes asignadas.")
+                
                 csv_file = st.file_uploader("Subir archivo CSV de contactos", type=["csv"])
                 if csv_file is not None:
                     import pandas as pd
@@ -590,8 +642,6 @@ María,López Ruiz,Coordinador,maria.lopez@tecnologico.edu,+34987654321,Institut
             st.subheader(":orange[Enviar mensaje]")
             
             # Verificar si el KAM tiene credenciales configuradas
-            user = st.session_state.get("user", {})
-            kam_email = user.get("email", "")
             email_user, email_pass = get_kam_email_credentials(kam_email)
             
             if not email_user or not email_pass:
@@ -656,8 +706,13 @@ María,López Ruiz,Coordinador,maria.lopez@tecnologico.edu,+34987654321,Institut
             inst_sel = st.selectbox("Selecciona institución", list(inst_options.keys())) if instituciones else None
             inst_id = inst_options[inst_sel] if inst_sel else None
             
-            # Paso 2: Seleccionar contacto(s) de la institución
-            contactos_inst = run_query("SELECT id, nombre, apellidos, cargo, email FROM contactos WHERE institucion_id = ?", (inst_id,)) if inst_id else []
+            # Paso 2: Seleccionar contacto(s) de la institución asignada
+            contactos_inst = run_query("""
+                SELECT c.id, c.nombre, c.apellidos, c.cargo, c.email 
+                FROM contactos c 
+                WHERE c.institucion_id = ?
+            """, (inst_id,)) if inst_id else []
+            
             if contactos_inst:
                 contacto_options = {f"{c[1]} {c[2] or ''} - {c[3]} | {c[4]}".strip(): c[0] for c in contactos_inst}
                 contactos_seleccionados = st.multiselect("Selecciona contacto(s) de la institución", list(contacto_options.keys()), key="contactos_multi")
