@@ -115,6 +115,25 @@ def test_email_credentials(email_user, email_pass):
         return False
 
 def show_kam_dashboard():
+    # Obtener el email del KAM actual
+    user = st.session_state.get("user", {})
+    kam_email = user.get("email", "")
+    
+    # Obtener el ID y nombre del KAM actual
+    kam_data = run_query("SELECT id, nombre FROM kams WHERE email = ?", (kam_email,))
+    if not kam_data:
+        st.error("❌ No se pudo encontrar tu información de KAM. Contacta al administrador.")
+        return
+    
+    kam_id = kam_data[0][0]
+    kam_nombre = kam_data[0][1]
+
+    # Mensaje de bienvenida personalizado en el sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"### 👋 ¡Hola, **{kam_nombre}**!")
+    st.sidebar.markdown("Bienvenido a tu panel KAM")
+    st.sidebar.markdown("---")
+
     # Explicación del proceso en el sidebar
     with st.sidebar.expander("¿Cómo funciona el Panel KAM?", expanded=False):
         st.markdown("""
@@ -134,18 +153,6 @@ def show_kam_dashboard():
     menu = st.sidebar.radio("Navegación", ["Contactos", "Mensajes"])
 
     st.header("Panel KAM: :red[Seguimiento de Instituciones y Clientes]")
-
-    # Obtener el email del KAM actual
-    user = st.session_state.get("user", {})
-    kam_email = user.get("email", "")
-    
-    # Obtener el ID del KAM actual
-    kam_data = run_query("SELECT id FROM kams WHERE email = ?", (kam_email,))
-    if not kam_data:
-        st.error("❌ No se pudo encontrar tu información de KAM. Contacta al administrador.")
-        return
-    
-    kam_id = kam_data[0][0]
 
     # Ver instituciones ASIGNADAS al KAM
     st.subheader(":blue[Instituciones asignadas]")
