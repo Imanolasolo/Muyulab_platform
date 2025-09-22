@@ -1,147 +1,157 @@
 import sqlite3
-import json
 import os
-from datetime import datetime
 
 DB_PATH = "database/muyulab.db"
-SYNC_DATA_FILE = "database/sync_data.json"
-LAST_SYNC_FILE = "database/last_sync.json"
 
-def get_last_sync():
-    """Obtiene la fecha de la última sincronización"""
-    if os.path.exists(LAST_SYNC_FILE):
-        with open(LAST_SYNC_FILE, 'r') as f:
-            data = json.load(f)
-            return data.get('last_sync')
-    return None
+# -------------------------------
+# Funciones de utilidad
+# -------------------------------
 
-def set_last_sync():
-    """Marca la fecha actual como última sincronización"""
-    os.makedirs("database", exist_ok=True)
-    with open(LAST_SYNC_FILE, 'w') as f:
-        json.dump({
-            'last_sync': datetime.now().isoformat()
-        }, f, indent=2)
+def get_connection():
+    """Abrir conexión a SQLite"""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    return sqlite3.connect(DB_PATH)
 
-def sync_data():
-    """Sincroniza datos desde el archivo JSON"""
-    if not os.path.exists(SYNC_DATA_FILE):
-        print("No hay archivo de sincronización disponible")
-        return
-    
-    with open(SYNC_DATA_FILE, 'r', encoding='utf-8') as f:
-        sync_data = json.load(f)
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    try:
-        # Sincronizar roles
-        if 'roles' in sync_data:
-            for role in sync_data['roles']:
-                cursor.execute("INSERT OR IGNORE INTO roles (nombre) VALUES (?)", (role['nombre'],))
-        
-        # Sincronizar instituciones
-        if 'instituciones' in sync_data:
-            for inst in sync_data['instituciones']:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO instituciones (nombre, ciudad, anio_programa) 
-                    VALUES (?, ?, ?)
-                """, (inst['nombre'], inst['ciudad'], inst['anio_programa']))
-        
-        # Sincronizar mensajes plantilla
-        if 'mensajes_plantilla' in sync_data:
-            for msg in sync_data['mensajes_plantilla']:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO mensajes (titulo, cuerpo, tipo, fecha_envio_programada) 
-                    VALUES (?, ?, ?, ?)
-                """, (msg['titulo'], msg['cuerpo'], msg['tipo'], datetime.now().date().isoformat()))
-        
-        conn.commit()
-        set_last_sync()
-        print("Sincronización completada exitosamente")
-        
-    except Exception as e:
-        print(f"Error durante la sincronización: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
-
-def get_table_columns(table_name):
-    """Obtiene las columnas existentes de una tabla"""
-    conn = sqlite3.connect(DB_PATH)
+def verificar_tabla_existe(nombre_tabla):
+    """Verificar si una tabla existe en la base de datos"""
+    conn = get_connection()
     cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info({table_name})")
-    columns = [row[1] for row in cur.fetchall()]  # row[1] es el nombre de la columna
+    cur.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name=?;
+    """, (nombre_tabla,))
+    existe = cur.fetchone() is not None
     conn.close()
-    return columns
+    return existe
 
-def column_exists(table_name, column_name):
-    """Verifica si una columna existe en una tabla"""
-    columns = get_table_columns(table_name)
-    return column_name in columns
-
-def run_migration_3():
-    """Migración 3: Agregar campos País, Dirección, Tipo de programa y Plan a instituciones"""
-    print("Ejecutando migración 3: Agregar campos País, Dirección, Tipo de programa y Plan a instituciones")
-    
-    conn = sqlite3.connect(DB_PATH)
+def verificar_columna_existe(nombre_tabla, nombre_columna):
+    """Verificar si una columna existe en una tabla"""
+    conn = get_connection()
     cur = conn.cursor()
-    
+    cur.execute(f"PRAGMA table_info({nombre_tabla})")
+    columnas = [fila[1] for fila in cur.fetchall()]
+    conn.close()
+    return nombre_columna in columnas
+
+def ejecutar_migracion(nombre, sql):
+    """Ejecutar un cambio en la base de datos"""
     try:
-        # Verificar y agregar cada columna solo si no existe
-        columns_to_add = [
-            ("pais", "TEXT"),
-            ("direccion", "TEXT"), 
-            ("tipo_programa", "TEXT DEFAULT 'Muyu Lab'"),
-            ("plan", "TEXT DEFAULT 'Pago'")
-        ]
-        
-        for column_name, column_definition in columns_to_add:
-            if not column_exists("instituciones", column_name):
-                cur.execute(f"ALTER TABLE instituciones ADD COLUMN {column_name} {column_definition}")
-                print(f"✅ Columna '{column_name}' agregada a instituciones")
-            else:
-                print(f"ℹ️ Columna '{column_name}' ya existe en instituciones")
-        
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(sql)
         conn.commit()
-        print("✅ Migración 3 completada exitosamente")
-        
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Error en migración 3: {e}")
-        raise e
-    finally:
         conn.close()
+        print(f"✅ Migración completada: {nombre}")
+        return True
+    except Exception as e:
+        print(f"⚠️ Error en migración {nombre}: {e}")
+        return False
+
+# -------------------------------
+# Migraciones
+# -------------------------------
+
+def migrar_tabla_kam_institucion():
+    """Crear tabla de relación KAM-Institución si no existe"""
+    if not verificar_tabla_existe("kam_institucion"):
+        sql = """
+        CREATE TABLE kam_institucion (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kam_id INTEGER NOT NULL,
+            institucion_id INTEGER NOT NULL,
+            fecha_asignacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (kam_id) REFERENCES kams (id) ON DELETE CASCADE,
+            FOREIGN KEY (institucion_id) REFERENCES instituciones (id) ON DELETE CASCADE,
+            UNIQUE(kam_id, institucion_id)
+        )
+        """
+        return ejecutar_migracion("Tabla kam_institucion", sql)
+    else:
+        print("ℹ️ Tabla kam_institucion ya existe")
+        return True
+
+def migrar_campos_instituciones():
+    """Agregar campos nuevos a la tabla instituciones"""
+    campos_nuevos = [
+        ("provincia", "TEXT"),
+        ("pais", "TEXT"),
+        ("direccion", "TEXT"),
+        ("tipo_programa", "TEXT DEFAULT 'Muyu Lab'"),
+        ("plan", "TEXT DEFAULT 'Pago'")
+    ]
+    
+    for campo, tipo in campos_nuevos:
+        if not verificar_columna_existe("instituciones", campo):
+            sql = f"ALTER TABLE instituciones ADD COLUMN {campo} {tipo}"
+            ejecutar_migracion(f"Campo {campo} en instituciones", sql)
+        else:
+            print(f"ℹ️ Campo {campo} ya existe en instituciones")
+
+def migrar_campos_kams():
+    """Agregar campos de email a la tabla kams"""
+    campos_nuevos = [
+        ("email_usuario", "TEXT"),
+        ("email_password", "TEXT")
+    ]
+    
+    for campo, tipo in campos_nuevos:
+        if not verificar_columna_existe("kams", campo):
+            sql = f"ALTER TABLE kams ADD COLUMN {campo} {tipo}"
+            ejecutar_migracion(f"Campo {campo} en kams", sql)
+        else:
+            print(f"ℹ️ Campo {campo} ya existe en kams")
+
+def ejecutar_todas_las_migraciones():
+    """Ejecuta todas las migraciones pendientes"""
+    print("🔄 Iniciando migraciones de base de datos...")
+    
+    migrar_tabla_kam_institucion()
+    migrar_campos_instituciones()
+    migrar_campos_kams()
+    
+    print("✅ Migraciones completadas")
+
+# -------------------------------
+# Sincronización
+# -------------------------------
 
 def auto_sync():
-    """Sincronización automática de datos al iniciar la aplicación"""
+    """Función principal de sincronización"""
     try:
-        current_version = get_current_version()
-        print(f"Versión actual de la base de datos: {current_version}")
+        print("🔄 Sincronización iniciada")
         
-        # Lista de migraciones disponibles
-        migrations = {
-            1: run_migration_1,
-            2: run_migration_2, 
-            3: run_migration_3,
-            4: run_migration_4
-        }
+        if os.path.exists(DB_PATH):
+            print("✅ Base de datos encontrada")
+            ejecutar_todas_las_migraciones()
+        else:
+            print("⚠️ Base de datos no encontrada - se creará automáticamente")
+            # Crea una BD vacía
+            conn = get_connection()
+            conn.close()
         
-        # Ejecutar migraciones pendientes
-        for version, migration_func in migrations.items():
-            if current_version < version:
-                try:
-                    migration_func()
-                    set_current_version(version)
-                    print(f"✅ Migración {version} aplicada correctamente")
-                except Exception as e:
-                    print(f"❌ Error en migración {version}: {e}")
-                    # No detener el proceso, continuar con la aplicación
-                    break
-        
-        print("🔄 Sincronización automática completada")
+        print("✅ Sincronización completada")
         
     except Exception as e:
-        print(f"⚠️ Error en sincronización automática: {e}")
-        # No lanzar excepción para no detener la aplicación
+        print(f"⚠️ Error en sincronización: {e}")
+
+# -------------------------------
+# Funciones de compatibilidad
+# -------------------------------
+
+def get_current_version():
+    return 4
+
+def set_current_version(version):
+    pass
+
+def set_last_sync():
+    pass
+
+def sync_data():
+    pass
+
+# -------------------------------
+# Ejecución de prueba
+# -------------------------------
+if __name__ == "__main__":
+    auto_sync()

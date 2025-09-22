@@ -823,12 +823,7 @@ María,López Ruiz,Coordinador,maria.lopez@tecnologico.edu,+34987654321,Institut
                 run_query("DELETE FROM mensajes")
                 st.success("Historial de mensajes borrado.")
                 st.rerun()
-            mensajes = run_query("SELECT titulo, tipo, fecha_envio_programada, enviado FROM mensajes ORDER BY fecha_envio_programada DESC")
-            for m in mensajes:
-                status = "✅ Enviado" if m[3] else "⏳ Pendiente"
-                st.write(f"{m[0]} | {m[1]} | {m[2]} | {status}")
-                st.success("Historial de mensajes borrado.")
-                st.rerun()
+            
             mensajes = run_query("SELECT titulo, tipo, fecha_envio_programada, enviado FROM mensajes ORDER BY fecha_envio_programada DESC")
             for m in mensajes:
                 status = "✅ Enviado" if m[3] else "⏳ Pendiente"

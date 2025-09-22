@@ -8,9 +8,13 @@ from modules.dashboards.KAM_dashboard import show_kam_dashboard
 
 st.set_page_config(page_title="Muyu Lab", layout="wide")
 
-# Inicializar BD y sincronizar datos
-init_db()
-auto_sync()  # Sincronización automática al iniciar
+# Inicializar BD primero
+try:
+    init_db()
+    # Sincronización simplificada
+    auto_sync()
+except Exception as e:
+    st.error(f"Error en inicialización: {e}")
 
 DB_PATH = "database/muyulab.db"
 
@@ -571,7 +575,7 @@ elif menu == "Contactos":
                 
                 col_res1, col_res2, col_res3 = st.columns(3)
                 with col_res1:
-                    st.metric("📊 Total filas", len(validated_data_final))
+                    st.metric("📊 Total filas", len(validos_final))
                 with col_res2:
                     st.metric("✅ Filas válidas", validos_final)
                 with col_res3:
@@ -794,3 +798,14 @@ elif menu == "Mensajes":
                 st.rerun()
         else:
             st.info("No hay mensajes registrados.")
+
+# Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; color: #666; font-size: 14px; margin-top: 50px;'>
+        Proudly created by <strong>Muyu Education</strong> 2025
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
