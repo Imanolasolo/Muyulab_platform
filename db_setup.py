@@ -69,6 +69,15 @@ def run_migrations():
             'sql': [
                 "ALTER TABLE contactos ADD COLUMN apellidos TEXT"
             ]
+        },
+        # Migración 5: Agregar credenciales de email para KAMs
+        {
+            'version': 5,
+            'description': 'Agregar campos de credenciales de email para KAMs',
+            'sql': [
+                "ALTER TABLE kams ADD COLUMN email_usuario TEXT",
+                "ALTER TABLE kams ADD COLUMN email_password TEXT"
+            ]
         }
     ]
     
@@ -104,9 +113,20 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
-        telefono TEXT
+        telefono TEXT,
+        email_usuario TEXT,
+        email_password TEXT
     )
     """)
+
+    # Verificar y agregar columnas faltantes para KAMs
+    cursor.execute("PRAGMA table_info(kams)")
+    kam_columns = [col[1] for col in cursor.fetchall()]
+    
+    if "email_usuario" not in kam_columns:
+        cursor.execute("ALTER TABLE kams ADD COLUMN email_usuario TEXT")
+    if "email_password" not in kam_columns:
+        cursor.execute("ALTER TABLE kams ADD COLUMN email_password TEXT")
 
     # Tabla de instituciones educativas
     cursor.execute("""
@@ -123,7 +143,7 @@ def init_db():
     )
     """)
 
-    # Verificar y agregar columnas faltantes para migraciones
+    # Verificar y agregar columnas faltantes para instituciones
     cursor.execute("PRAGMA table_info(instituciones)")
     columns = [col[1] for col in cursor.fetchall()]
     
