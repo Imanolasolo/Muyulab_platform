@@ -8,7 +8,7 @@ def login_form():
     with col1:
         st.image("assets/muyu_logo.jpg", width=200)
     with col2:
-        st.subheader("Bienvenidos a :red[MuyuLAB], tu plataforma de gestión educativa")
+        st.subheader("Bienvenidos a :red[MuyuLAB contact], tu plataforma de gestión de leads y clientes.")
     col1, col2 = st.columns([2, 2])
     with col1:
         st.subheader(":blue[Iniciar sesión]")

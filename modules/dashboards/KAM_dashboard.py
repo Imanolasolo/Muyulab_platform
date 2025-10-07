@@ -152,6 +152,7 @@ def show_kam_dashboard():
 
     menu = st.sidebar.radio("Navegación", ["Contactos", "Mensajes"])
 
+    st.image("assets/muyu_logo.jpg", width=200)
     st.header("Panel KAM: :red[Seguimiento de Instituciones y Clientes]")
 
     # Ver instituciones ASIGNADAS al KAM
@@ -765,11 +766,11 @@ María,López Ruiz,Coordinador,maria.lopez@tecnologico.edu,+34987654321,Institut
                         contacto_data = run_query("SELECT nombre, apellidos, email FROM contactos WHERE id = ?", (contacto_id,))
                         if contacto_data:
                             contacto_data = contacto_data[0]  # Get first row
-                            nombre_completo = f"{contacto_data[0]} {contacto_data[1] or ''}".strip()
+                            solo_nombre = contacto_data[0].strip()  # Solo el nombre, sin apellidos
                             
                             # Crear mensaje personalizado
                             if usar_saludo:
-                                mensaje_personalizado = f"{saludo_personalizado} {nombre_completo},\n\n{cuerpo_base}"
+                                mensaje_personalizado = f"{saludo_personalizado} {solo_nombre},\n\n{cuerpo_base}"
                             else:
                                 mensaje_personalizado = cuerpo_base
                             
@@ -796,12 +797,13 @@ María,López Ruiz,Coordinador,maria.lopez@tecnologico.edu,+34987654321,Institut
                     contacto_data = run_query("SELECT nombre, apellidos, telefono FROM contactos WHERE id = ?", (contacto_id,))
                     if contacto_data:
                         contacto_data = contacto_data[0]  # Get first row
-                        nombre_completo = f"{contacto_data[0]} {contacto_data[1] or ''}".strip()
+                        solo_nombre = contacto_data[0].strip()  # Solo el nombre, sin apellidos
+                        nombre_completo = f"{contacto_data[0]} {contacto_data[1] or ''}".strip()  # Para mostrar en el botón
                         telefono = contacto_data[2]
                         
                         # Crear mensaje personalizado para WhatsApp
                         if usar_saludo:
-                            mensaje_wa = f"{saludo_personalizado} {nombre_completo},\n\n{cuerpo_base}"
+                            mensaje_wa = f"{saludo_personalizado} {solo_nombre},\n\n{cuerpo_base}"
                         else:
                             mensaje_wa = cuerpo_base
                         
