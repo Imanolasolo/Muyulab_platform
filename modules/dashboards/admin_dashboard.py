@@ -435,9 +435,55 @@ def show_admin_dashboard():
 
         elif accion_contacto == "Carga masiva":
             st.write("### Carga masiva de contactos")
-            csv_file = st.file_uploader("Subir archivo CSV de contactos", type=["csv"])
+            
+            # --- NUEVO: Información previa y plantilla descargable ---
+            st.info("""
+            **Formato requerido para la hoja de cálculo:**  
+            El archivo debe contener las siguientes columnas (en este orden o con estos nombres exactos):
+            - `nombre`: Nombre del contacto
+            - `apellidos`: Apellidos del contacto
+            - `cargo`: Cargo o rol (ejemplo: Director, Coordinador, etc.)
+            - `email`: Email institucional del contacto
+            - `telefono`: Número de teléfono (preferentemente compatible con WhatsApp)
+            - `institucion`: Nombre exacto de la institución (debe coincidir con la base de datos o se creará nueva)
+            """)
+            
+            st.markdown("**Ejemplo de archivo:**")
+            ejemplo_csv = """nombre,apellidos,cargo,email,telefono,institucion
+Juan,Pérez García,Director,juan.perez@universidad.edu,+34123456789,Universidad Nacional
+María,López Ruiz,Coordinador,maria.lopez@tecnologico.edu,+34987654321,Instituto Tecnológico"""
+            st.code(ejemplo_csv, language="csv")
+            
+            # Plantilla vacía para descargar
+            import io
+            import pandas as pd
+            plantilla_df = pd.DataFrame(columns=["nombre", "apellidos", "cargo", "email", "telefono", "institucion"])
+            plantilla_buffer = io.BytesIO()
+            plantilla_df.to_excel(plantilla_buffer, index=False)
+            plantilla_buffer.seek(0)
+            st.download_button(
+                label="📥 Descargar plantilla vacía (Excel)",
+                data=plantilla_buffer,
+                file_name="plantilla_contactos.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+            st.markdown("---")
+            st.write("Puedes subir un archivo **CSV** o **Excel (.xlsx)** con los contactos a cargar.")
+            
+            # --- FIN NUEVO ---
+            
+            # Permitir subir CSV o Excel
+            csv_file = st.file_uploader("Subir archivo CSV o Excel de contactos", type=["csv", "xlsx"])
             if csv_file is not None:
-                df = pd.read_csv(csv_file)
+                # Detectar tipo de archivo y leer
+                if csv_file.name.endswith(".csv"):
+                    df = pd.read_csv(csv_file)
+                elif csv_file.name.endswith(".xlsx"):
+                    df = pd.read_excel(csv_file)
+                else:
+                    st.error("Formato de archivo no soportado. Usa CSV o Excel (.xlsx)")
+                    return
                 required_cols = {"nombre", "apellidos", "cargo", "email", "telefono", "institucion"}
                 if required_cols.issubset(df.columns):
                     # Crear mapeos con nombres normalizados

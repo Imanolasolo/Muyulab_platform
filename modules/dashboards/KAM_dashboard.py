@@ -314,6 +314,46 @@ def show_kam_dashboard():
                     
                 st.write("### Carga masiva de contactos")
                 st.info("ℹ️ Solo puedes agregar contactos a las instituciones que tienes asignadas.")
+
+                st.markdown("""
+**Formato requerido para la hoja de cálculo:**
+
+La plantilla debe tener los siguientes encabezados (en la primera fila):
+- Institución
+- Nombre
+- Apellidos
+- Cargo
+- Directivo
+- Email institucional
+- Teléfono celular, número compatible con WhatsApp
+
+Puedes descargar una plantilla de ejemplo en Excel para facilitar el proceso.
+""")
+
+                import pandas as pd
+                import io
+                def generar_plantilla_excel():
+                    columnas = [
+                        "Institución",
+                        "Nombre",
+                        "Apellidos",
+                        "Cargo",
+                        "Directivo",
+                        "Email institucional",
+                        "Teléfono celular, número compatible con WhatsApp"
+                    ]
+                    df = pd.DataFrame(columns=columnas)
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                        df.to_excel(writer, index=False)
+                    return output.getvalue()
+
+                st.download_button(
+                    label="Descargar plantilla Excel de contactos",
+                    data=generar_plantilla_excel(),
+                    file_name="plantilla_contactos.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
                 
                 csv_file = st.file_uploader("Subir archivo CSV de contactos", type=["csv"])
                 if csv_file is not None:
