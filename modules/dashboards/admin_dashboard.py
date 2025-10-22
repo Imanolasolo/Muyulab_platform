@@ -82,6 +82,8 @@ def show_admin_dashboard():
     if menu == "KAMs":
         st.subheader(":blue[Gestión de KAMs]")
         acciones_kam = ["Registrar KAM", "Modificar KAM", "Borrar KAM", "Ver KAMs", "Asignar Instituciones", "Configurar Email"]
+        # Añadir opción de limpieza de duplicados en kam_institucion (solo para admins)
+        acciones_kam.append("Limpiar duplicados asignaciones KAM")
         accion_kam = st.selectbox("Selecciona una acción:", acciones_kam)
 
         if accion_kam == "Registrar KAM":
@@ -256,6 +258,75 @@ def show_admin_dashboard():
                         inst_id = inst_dict[inst_name]
                         run_query("INSERT OR IGNORE INTO kam_institucion (kam_id, institucion_id) VALUES (?, ?)", (kam_id, inst_id))
                     st.success("Instituciones asignadas al KAM correctamente")
+        elif accion_kam == "Limpiar duplicados asignaciones KAM":
+            st.write("### Limpiar duplicados en kam_institucion")
+            st.markdown("Este proceso detecta pares (kam_id, institucion_id) con más de una fila y permite eliminarlas. Se creará una copia de seguridad automática antes de modificar la base de datos.")
+            col1, col2 = st.columns(2)
+            with col1:
+                do_run = st.button("🔍 Ejecutar análisis (dry-run)")
+            with col2:
+                do_apply = st.button("🗑️ Ejecutar limpieza (eliminar duplicados)")
+
+            keep_choice = st.selectbox("Conservar fila:", ["first", "last"], index=0)
+            add_index = st.checkbox("Crear índice único (kam_id, institucion_id) después de limpiar", value=False)
+
+            def _backup_db(path):
+                import shutil
+                from datetime import datetime
+                ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                dest = f"{path}.backup_{ts}"
+                shutil.copy2(path, dest)
+                return dest
+
+            def _find_duplicates():
+                rows = run_query("""
+                    SELECT kam_id, institucion_id, COUNT(*) as cnt
+                    FROM kam_institucion
+                    GROUP BY kam_id, institucion_id
+                    HAVING cnt > 1
+                """).fetchall()
+                return rows
+
+            def _get_rows_for_pair(kam_id, inst_id):
+                return run_query("SELECT id FROM kam_institucion WHERE kam_id = ? AND institucion_id = ? ORDER BY id", (kam_id, inst_id)).fetchall()
+
+            if do_run or do_apply:
+                db_path = DB_PATH
+                st.info(f"Usando DB: {db_path}")
+                backup_path = _backup_db(db_path)
+                st.success(f"Backup creado en: {backup_path}")
+
+                dups = _find_duplicates()
+                if not dups:
+                    st.success("No se encontraron duplicados en kam_institucion.")
+                else:
+                    st.write(f"Se encontraron {len(dups)} pares duplicados:")
+                    for kam_id, inst_id, cnt in dups:
+                        st.write(f"- kam_id={kam_id}, institucion_id={inst_id} → {cnt} filas")
+                        rows = _get_rows_for_pair(kam_id, inst_id)
+                        ids = [r[0] for r in rows]
+                        st.write(f"  Filas: {ids}")
+
+                        if do_apply:
+                            # decide which to delete
+                            if keep_choice == 'first':
+                                keep_id = ids[0]
+                                del_ids = ids[1:]
+                            else:
+                                keep_id = ids[-1]
+                                del_ids = ids[:-1]
+
+                            if del_ids:
+                                for did in del_ids:
+                                    run_query("DELETE FROM kam_institucion WHERE id = ?", (did,))
+                                st.success(f"Eliminadas filas: {del_ids} (se conservó id {keep_id})")
+
+                    if do_apply and add_index:
+                        try:
+                            run_query("CREATE UNIQUE INDEX IF NOT EXISTS idx_kam_institucion_unique ON kam_institucion (kam_id, institucion_id)")
+                            st.success("Índice único creado: idx_kam_institucion_unique")
+                        except Exception as e:
+                            st.error(f"No se pudo crear el índice: {e}")
             else:
                 st.info("Debes tener al menos un KAM y una institución para asignar.")
 

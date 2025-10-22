@@ -355,10 +355,85 @@ Puedes descargar una plantilla de ejemplo en Excel para facilitar el proceso.
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
                 
-                csv_file = st.file_uploader("Subir archivo CSV de contactos", type=["csv"])
+                csv_file = st.file_uploader("Subir archivo CSV o Excel de contactos", type=["csv", "xlsx"])
                 if csv_file is not None:
+                    # Detectar tipo de archivo y leer
+                    import io
                     import pandas as pd
-                    df = pd.read_csv(csv_file)
+                    if csv_file.name.endswith(".csv"):
+                        df = pd.read_csv(csv_file)
+                    elif csv_file.name.endswith(".xlsx"):
+                        df = pd.read_excel(csv_file)
+                    else:
+                        st.error("Formato de archivo no soportado. Usa CSV o Excel (.xlsx)")
+                        return
+                    # Normalizar nombres de columnas para aceptar variantes (mayúsculas, espacios, acentos)
+                    import unicodedata, re
+                    def _norm(s):
+                        s = str(s or "").lower().strip()
+                        s = unicodedata.normalize('NFKD', s)
+                        s = ''.join(c for c in s if not unicodedata.combining(c))
+                        s = re.sub(r'[^a-z0-9]', '', s)
+                        return s
+
+                    # Mapeo de variantes conocidas a nombres canónicos
+                    variants = {
+                        'nombre': ['nombre', 'name'],
+                        'apellidos': ['apellidos', 'apellido', 'surname'],
+                        'cargo': ['cargo', 'directivo', 'puesto', 'rol', 'position'],
+                        'email': ['email', 'emailinstitucional', 'email_institucional', 'emailinstitucional', 'emailinstitucional'],
+                        'telefono': ['telefono', 'telefonocelular', 'telefono_celular', 'telefono celular', 'telefono celular numero compatible con whatsapp', 'telefono celular numero compatible con whatsapp'],
+                        'institucion': ['institucion', 'institucionnombre', 'institucion_nombre', 'institución', 'institucion']
+                    }
+
+                    # Construir mapa de columnas del archivo a nombres canónicos
+                    col_map = {}
+                    norms_to_canonical = {}
+                    for canon, vals in variants.items():
+                        for v in vals:
+                            norms_to_canonical[_norm(v)] = canon
+
+                    for col in list(df.columns):
+                        n = _norm(col)
+                        if n in norms_to_canonical:
+                            col_map[col] = norms_to_canonical[n]
+
+                    # Build mapping canonical -> original columns (in file order)
+                    canonical_to_originals = {}
+                    for orig_col in list(df.columns):
+                        if orig_col in col_map:
+                            canon = col_map[orig_col]
+                            canonical_to_originals.setdefault(canon, []).append(orig_col)
+
+                    # Priority lists for certain canonicals: prefer explicit 'cargo' over 'directivo'
+                    priority_norms = {
+                        'cargo': ['cargo', 'directivo', 'puesto', 'rol', 'position']
+                    }
+
+                    # Coalesce original columns into canonical columns using priority order
+                    for canon in ["nombre", "apellidos", "cargo", "email", "telefono", "institucion"]:
+                        originals = canonical_to_originals.get(canon, [])
+                        if not originals:
+                            continue
+                        # If there is a priority ordering for this canonical, sort originals accordingly
+                        if canon in priority_norms:
+                            pri = priority_norms[canon]
+                            def _prio_key(colname):
+                                n = _norm(colname)
+                                try:
+                                    return pri.index(n)
+                                except ValueError:
+                                    return len(pri) + originals.index(colname)
+                            originals = sorted(originals, key=_prio_key)
+
+                        if len(originals) > 1:
+                            try:
+                                df[canon] = df[originals].bfill(axis=1).iloc[:, 0]
+                            except Exception:
+                                df[canon] = df[originals[0]]
+                        else:
+                            df[canon] = df[originals[0]]
+
                     required_cols = {"nombre", "apellidos", "cargo", "email", "telefono", "institucion"}
                     if required_cols.issubset(df.columns):
                         # Crear mapeos con nombres normalizados
@@ -399,6 +474,8 @@ Puedes descargar una plantilla de ejemplo en Excel para facilitar el proceso.
                             for cargo in cargos_csv:
                                 st.write(f"• '{cargo}'")
                         
+                    # Análisis y validación
+                    if required_cols.issubset(df.columns):
                         # Validar cada fila ANTES de mostrar la tabla
                         validated_data = []
                         for index, row in df.iterrows():
@@ -634,14 +711,21 @@ Puedes descargar una plantilla de ejemplo en Excel para facilitar el proceso.
                                                 final_inst_id = row_data['institucion_id']
                                             
                                             if final_inst_id:
-                                                run_insert_query(
-                                                    "INSERT INTO contactos (nombre, apellidos, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?, ?)",
-                                                    (row_data['nombre'], row_data['apellidos'], row_data['cargo'], 
-                                                     row_data['email'], row_data['telefono'], final_inst_id)
+                                                # Evitar duplicados: comprobar si ya existe contacto con mismo email y misma institución
+                                                exists = run_query(
+                                                    "SELECT id FROM contactos WHERE email = ? AND institucion_id = ?",
+                                                    (row_data['email'], final_inst_id)
                                                 )
-                                                
-                                                success_count += 1
-                                                datos_insertados.append(f"✅ Fila {row_data['fila']}: {row_data['nombre']} {row_data['apellidos']}")
+                                                if exists:
+                                                    datos_insertados.append(f"⚠️ Fila {row_data['fila']}: Contacto ya existe (email) - se omitió: {row_data['nombre']} {row_data['apellidos']}")
+                                                else:
+                                                    run_insert_query(
+                                                        "INSERT INTO contactos (nombre, apellidos, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?, ?)",
+                                                        (row_data['nombre'], row_data['apellidos'], row_data['cargo'], 
+                                                         row_data['email'], row_data['telefono'], final_inst_id)
+                                                    )
+                                                    success_count += 1
+                                                    datos_insertados.append(f"✅ Fila {row_data['fila']}: {row_data['nombre']} {row_data['apellidos']}")
                                             else:
                                                 datos_insertados.append(f"❌ Fila {row_data['fila']}: Error con institución")
                                                 
