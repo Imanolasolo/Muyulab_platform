@@ -5,6 +5,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from urllib.parse import quote
+from utils import gmail_simple_contacts
 
 DB_PATH = "database/muyulab.db"
 
@@ -176,7 +177,7 @@ def show_kam_dashboard():
         with st.expander("Administrar Contactos"):
             st.subheader(":blue[Gestión de Contactos]")
             acciones_contacto = [
-                "Registrar contacto", "Modificar contacto", "Borrar contacto", "Ver contactos", "Carga masiva"
+                "Registrar contacto", "Modificar contacto", "Borrar contacto", "Ver contactos", "Carga masiva", "Importar desde Gmail"
             ]
             accion_contacto = st.selectbox("Selecciona una acción:", acciones_contacto)
 
@@ -767,6 +768,222 @@ Puedes descargar una plantilla de ejemplo en Excel para facilitar el proceso.
 Juan,Pérez García,Director,juan.perez@universidad.edu,+34123456789,Universidad Nacional
 María,López Ruiz,Coordinador,maria.lopez@tecnologico.edu,+34987654321,Instituto Tecnológico"""
                         st.code(ejemplo_csv)
+
+            elif accion_contacto == "Importar desde Gmail":
+                if not instituciones:
+                    st.warning("⚠️ No tienes instituciones asignadas. No puedes importar contactos.")
+                    return
+                    
+                st.write("### Importar contactos desde Gmail")
+                st.info("""
+                📧 **Importa contactos desde tu email de Gmail**
+                
+                Esta función:
+                - Usa tus credenciales de email ya configuradas
+                - Extrae contactos de tus correos enviados y recibidos
+                - Los asigna solo a tus instituciones permitidas
+                - Los contactos se ordenan por frecuencia de interacción
+                """)
+                
+                # Obtener credenciales del KAM
+                email_user, email_pass = get_kam_email_credentials(kam_email)
+                
+                if not email_user or not email_pass:
+                    st.warning("⚠️ **Credenciales de email no configuradas**")
+                    st.info("""
+                    Para importar contactos desde Gmail necesitas que el administrador configure 
+                    tus credenciales de email.
+                    
+                    Contacta al administrador para que:
+                    1. Vaya a **KAMs → Configurar Email**
+                    2. Configure tu email de Gmail y contraseña de aplicación
+                    """)
+                    return
+                
+                is_authenticated = True
+                
+                if is_authenticated:
+                    st.success(f"✅ Usando credenciales de: {email_user}")
+                    
+                    # Configuración
+                    max_emails = st.slider("Número de correos a analizar", min_value=50, max_value=500, value=200, step=50,
+                                          help="Más correos = más contactos pero tarda más tiempo")
+                    
+                    if st.button("📥 Extraer contactos desde Gmail", type="primary"):
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        def update_progress(message, progress):
+                            status_text.text(message)
+                            progress_bar.progress(progress)
+                        
+                        with st.spinner(f"Analizando últimos {max_emails} correos..."):
+                            contactos_gmail, error = gmail_simple_contacts.get_contacts_from_gmail_simple(
+                                email_user, 
+                                email_pass, 
+                                max_emails=max_emails,
+                                progress_callback=update_progress
+                            )
+                        
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                        if error:
+                            st.error(f"❌ {error}")
+                            st.info("""
+                            **Posibles soluciones:**
+                            - Verifica que tus credenciales de email estén correctas
+                            - Asegúrate de que sea una **contraseña de aplicación** de Gmail
+                            - Contacta al administrador para actualizar tus credenciales
+                            """)
+                        elif contactos_gmail:
+                            st.session_state['contactos_gmail_kam'] = contactos_gmail
+                            st.success(f"✅ Se extrajeron {len(contactos_gmail)} contactos únicos")
+                            st.rerun()
+                        else:
+                            st.warning("No se encontraron contactos en los correos analizados")
+                    
+                    # Mostrar y procesar contactos si existen en session_state
+                    if 'contactos_gmail_kam' in st.session_state:
+                        contactos_gmail = st.session_state['contactos_gmail_kam']
+                        
+                        st.subheader(f"📋 Contactos obtenidos: {len(contactos_gmail)}")
+                        
+                        # Crear DataFrame para vista previa
+                        import pandas as pd
+                        df_preview = pd.DataFrame(contactos_gmail)
+                        st.dataframe(df_preview, use_container_width=True)
+                        
+                        st.markdown("---")
+                        st.subheader("💾 Guardar contactos en la base de datos")
+                        
+                        # Opciones de importación (solo instituciones asignadas al KAM)
+                        st.write("**Opciones de asignación:**")
+                        st.info("ℹ️ Solo puedes asignar contactos a las instituciones que tienes asignadas")
+                        
+                        opcion_institucion = st.radio(
+                            "¿Cómo asignar las instituciones?",
+                            [
+                                "Asignar todos a una de mis instituciones",
+                                "Intentar usar institución del contacto (si coincide con mis asignadas)"
+                            ]
+                        )
+                        
+                        institucion_especifica_id = None
+                        
+                        if "Asignar todos" in opcion_institucion:
+                            inst_names = list(institucion_dict.keys())
+                            if inst_names:
+                                inst_sel = st.selectbox("Selecciona institución:", inst_names)
+                                institucion_especifica_id = institucion_dict[inst_sel]
+                        
+                        # Opción para roles
+                        cargo_por_defecto = st.selectbox(
+                            "Cargo por defecto (para contactos sin cargo):",
+                            roles_list if roles_list else ["Contacto"]
+                        )
+                        
+                        # Botón para importar
+                        if st.button("💾 Importar contactos seleccionados", type="primary"):
+                            if "Asignar todos" in opcion_institucion and not institucion_especifica_id:
+                                st.error("Debes seleccionar una institución")
+                            else:
+                                progress_bar = st.progress(0)
+                                status_text = st.empty()
+                                
+                                success_count = 0
+                                error_count = 0
+                                skip_count = 0
+                                no_inst_count = 0
+                                
+                                # Importar contactos
+                                for i, contacto in enumerate(contactos_gmail):
+                                    progress_bar.progress((i + 1) / len(contactos_gmail))
+                                    status_text.text(f"Importando: {contacto['nombre']} {contacto['apellidos']}")
+                                    
+                                    try:
+                                        # Determinar institución
+                                        if "Asignar todos" in opcion_institucion:
+                                            inst_id = institucion_especifica_id
+                                        else:
+                                            # Buscar si la institución del contacto está en las asignadas al KAM
+                                            inst_nombre = contacto['institucion']
+                                            inst_id = None
+                                            
+                                            for nombre, iid in institucion_dict.items():
+                                                if nombre.lower().strip() == inst_nombre.lower().strip():
+                                                    inst_id = iid
+                                                    break
+                                            
+                                            if not inst_id:
+                                                # La institución del contacto no está asignada al KAM
+                                                no_inst_count += 1
+                                                continue
+                                        
+                                        # Verificar si ya existe el contacto
+                                        existing = run_query(
+                                            "SELECT id FROM contactos WHERE email = ? AND institucion_id = ?",
+                                            (contacto['email'], inst_id)
+                                        )
+                                        
+                                        if existing:
+                                            skip_count += 1
+                                            continue
+                                        
+                                        # Determinar cargo
+                                        cargo = contacto['cargo'] if contacto['cargo'] and contacto['cargo'] != 'Contacto' else cargo_por_defecto
+                                        
+                                        # Crear rol si no existe
+                                        if cargo not in roles_list:
+                                            try:
+                                                run_insert_query("INSERT INTO roles (nombre) VALUES (?)", (cargo,))
+                                                roles_list.append(cargo)
+                                            except:
+                                                pass
+                                        
+                                        # Insertar contacto
+                                        run_insert_query(
+                                            "INSERT INTO contactos (nombre, apellidos, cargo, email, telefono, institucion_id) VALUES (?, ?, ?, ?, ?, ?)",
+                                            (
+                                                contacto['nombre'],
+                                                contacto['apellidos'],
+                                                cargo,
+                                                contacto['email'],
+                                                contacto['telefono'],
+                                                inst_id
+                                            )
+                                        )
+                                        success_count += 1
+                                        
+                                    except Exception as e:
+                                        error_count += 1
+                                        st.warning(f"Error con {contacto['email']}: {e}")
+                                
+                                progress_bar.empty()
+                                status_text.empty()
+                                
+                                # Mostrar resumen
+                                st.success(f"✅ Importación completada")
+                                col1, col2, col3, col4 = st.columns(4)
+                                with col1:
+                                    st.metric("✅ Importados", success_count)
+                                with col2:
+                                    st.metric("⏭️ Omitidos (duplicados)", skip_count)
+                                with col3:
+                                    st.metric("🏢 Sin institución asignada", no_inst_count)
+                                with col4:
+                                    st.metric("❌ Errores", error_count)
+                                
+                                if no_inst_count > 0:
+                                    st.info(f"ℹ️ {no_inst_count} contactos no se importaron porque sus instituciones no están asignadas a tu cuenta KAM")
+                                
+                                # Limpiar session state
+                                del st.session_state['contactos_gmail_kam']
+                                
+                                if st.button("🔄 Importar más contactos"):
+                                    st.rerun()
+                    
+                # El resto del flujo permanece igual
 
     if menu == "Mensajes":
         # Enviar mensaje
